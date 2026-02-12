@@ -1,148 +1,98 @@
 import os
 import threading
 import time
-import random
-import math
 from flask import Flask
-from javascript import require, On, AsyncTask
+from javascript import require, On
 
-# --- CẤU HÌNH SERVER ---
+# --- CẤU HÌNH SERVER BEDROCK ---
 SERVER_IP = "bongx1.aternos.me"
-SERVER_PORT = 48987
-BOT_USERNAME = "BongX_SieuBot"
+SERVER_PORT = 48987 # Port Bedrock thường là số 5 chữ số
+BOT_USERNAME = "Bot_Bedrock_Vip"
 
-# --- PHẦN 1: FAKE WEB SERVER (Để Render không tắt) ---
+# --- WEB SERVER GIẢ (GIỮ RENDER SỐNG) ---
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return f"Bot {BOT_USERNAME} đang hoạt động với chế độ Anti-Detection v2.0"
+    return f"Bot Bedrock {BOT_USERNAME} đang hoạt động!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- PHẦN 2: BOT THÔNG MINH ---
-mineflayer = require('mineflayer')
-
-# Danh sách các câu chat ngẫu nhiên (để giả người)
-CHAT_MESSAGES = [
-    "lag qua",
-    "...",
-    "server on roi",
-    "treo ty nhe",
-    "ai do cho xin it go",
-    "ping cao the nhi"
-]
+# --- PHẦN CODE BOT BEDROCK ---
+bedrock = require('bedrock-protocol')
 
 def run_bot():
     while True:
         try:
-            print(f"[*] Đang kết nối tới {SERVER_IP}:{SERVER_PORT}...")
+            print(f"[*] Đang kết nối tới Server Bedrock: {SERVER_IP}:{SERVER_PORT}...")
             
-            bot = mineflayer.createBot({
+            # Tạo client kết nối
+            client = bedrock.createClient({
                 'host': SERVER_IP,
                 'port': SERVER_PORT,
                 'username': BOT_USERNAME,
-                'hideErrors': True,
-                'version': False
+                'offline': True, # BẮT BUỘC: Server phải bật Cracked
+                'skipPing': True # Bỏ qua check ping để vào nhanh hơn
             })
 
-            # --- CÁC HÀM HÀNH VI CON NGƯỜI ---
-            
-            def look_around():
-                # Quay đầu ngẫu nhiên (Yaw và Pitch)
-                yaw = random.uniform(0, math.pi * 2)
-                pitch = random.uniform(-math.pi/2, math.pi/2)
-                bot.look(yaw, pitch)
+            # Biến kiểm tra trạng thái
+            is_connected = False
 
-            def walk_randomly():
-                # Đi bộ ngẫu nhiên trong 1-2 giây rồi dừng
-                direction = random.choice(['forward', 'back', 'left', 'right'])
-                bot.setControlState(direction, True)
-                time.sleep(random.uniform(0.5, 1.5)) 
-                bot.setControlState(direction, False)
+            # Sự kiện khi kết nối thành công (spawn)
+            @On(client, 'spawn')
+            def on_spawn(packet):
+                nonlocal is_connected
+                if not is_connected:
+                    print(f"[+] {BOT_USERNAME} ĐÃ VÀO SERVER THÀNH CÔNG!")
+                    is_connected = True
+                    
+                    # Vòng lặp Anti-AFK (Chat mỗi 60s)
+                    def anti_afk_loop():
+                        while is_connected:
+                            try:
+                                # Gửi packet chat để server biết mình còn sống
+                                # (Bot Bedrock không nhảy được, nên phải dùng chat)
+                                msg = "Bot đang treo máy..."
+                                client.queue('text', {
+                                    'type': 'chat', 
+                                    'needs_translation': False, 
+                                    'source_name': client.username, 
+                                    'xuid': '', 
+                                    'platform_chat_id': '',
+                                    'message': msg
+                                })
+                                print("[Action] Bot vừa chat chống AFK")
+                                time.sleep(60)
+                            except:
+                                break
+                    
+                    # Chạy luồng Anti-AFK riêng
+                    threading.Thread(target=anti_afk_loop, daemon=True).start()
 
-            def sneak_spam():
-                # Ngồi xuống đứng lên (teabag)
-                count = random.randint(2, 5)
-                for _ in range(count):
-                    bot.setControlState('sneak', True)
-                    time.sleep(random.uniform(0.1, 0.3))
-                    bot.setControlState('sneak', False)
-                    time.sleep(random.uniform(0.1, 0.3))
+            # Sự kiện khi bị ngắt kết nối
+            @On(client, 'close')
+            def on_close(reason):
+                nonlocal is_connected
+                is_connected = False
+                print(f"[-] Bot bị ngắt kết nối. Lý do: {reason}")
 
-            def swing_arm():
-                # Đấm gió
-                bot.swingArm()
+            @On(client, 'error')
+            def on_error(err):
+                print(f"[!] Lỗi: {err}")
 
-            # --- LUỒNG CHÍNH CỦA BOT ---
-
-            @On(bot, 'login')
-            def login(this):
-                print(f"[+] {BOT_USERNAME} ĐÃ VÀO SERVER (CHẾ ĐỘ ẨN DANH)")
-                
-                # Vòng lặp hành động ngẫu nhiên
-                while True:
-                    try:
-                        # 1. Chọn hành động ngẫu nhiên
-                        action = random.choice([
-                            'look', 'look', 'look', # Tăng tỉ lệ nhìn quanh (an toàn nhất)
-                            'walk', 
-                            'jump', 
-                            'sneak', 
-                            'swing',
-                            'chat'
-                        ])
-
-                        if action == 'look':
-                            look_around()
-                            print("[Action] Nhìn quanh")
-                        elif action == 'walk':
-                            walk_randomly()
-                            print("[Action] Đi dạo")
-                        elif action == 'jump':
-                            bot.setControlState('jump', True)
-                            time.sleep(0.5)
-                            bot.setControlState('jump', False)
-                            print("[Action] Nhảy")
-                        elif action == 'sneak':
-                            sneak_spam()
-                            print("[Action] Ngồi lên ngồi xuống")
-                        elif action == 'swing':
-                            swing_arm()
-                            print("[Action] Đấm gió")
-                        elif action == 'chat':
-                            # Chỉ chat 5% cơ hội để tránh spam
-                            if random.random() < 0.05:
-                                msg = random.choice(CHAT_MESSAGES)
-                                bot.chat(msg)
-                                print(f"[Action] Chat: {msg}")
-
-                        # 2. Ngủ một khoảng thời gian NGẪU NHIÊN (Quan trọng nhất)
-                        # Không bao giờ ngủ cố định 30s. Lúc 15s, lúc 60s, lúc 45s.
-                        sleep_time = random.uniform(15, 90)
-                        print(f"[*] Nghỉ {int(sleep_time)}s...")
-                        time.sleep(sleep_time)
-
-                    except Exception as e:
-                        print(f"[!] Lỗi hành vi: {e}")
-                        break
-
-            @On(bot, 'end')
-            def end(this, reason):
-                print(f"[-] Kết nối bị ngắt: {reason}")
-
-            @On(bot, 'error')
-            def error(this, err):
-                print(f"[!] Lỗi mạng: {err}")
-
-            # Đợi trước khi reconnect (tránh bị ban IP do spam connect)
-            time.sleep(random.uniform(10, 20))
+            # Giữ kết nối trong vòng lặp này
+            while True:
+                time.sleep(1)
+                # Nếu bot bị disconnect thì thoát vòng lặp để reconnect
+                if not is_connected and "client" in locals() and hasattr(client, 'status') and client.status == 1: 
+                     # status 1 là disconnected trong một số phiên bản, nhưng an toàn nhất là dựa vào event close
+                     pass
 
         except Exception as e:
-            print(f"[!] Crash tổng: {e}")
-            time.sleep(30)
+            print(f"[!] Lỗi khởi tạo: {e}")
+            time.sleep(20)
 
 # --- CHẠY ---
 if __name__ == "__main__":
@@ -150,4 +100,4 @@ if __name__ == "__main__":
     t.daemon = True
     t.start()
     run_flask()
-                          
+            
