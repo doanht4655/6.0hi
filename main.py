@@ -4,36 +4,84 @@ import time
 from flask import Flask
 from javascript import require, On
 
-# --- CẤU HÌNH SERVER BEDROCK ---
+# --- CẤU HÌNH ---
 SERVER_IP = "bongx1.aternos.me"
-SERVER_PORT = 48987 # Port Bedrock thường là số 5 chữ số
-BOT_USERNAME = "Bot_Bedrock_Vip"
+SERVER_PORT = 48987 # Check lại port trên Aternos xem có đổi ko
+BOT_USERNAME = "Bot_BongX_Vip"
 
-# --- WEB SERVER GIẢ (GIỮ RENDER SỐNG) ---
 app = Flask(__name__)
-
 @app.route('/')
-def index():
-    return f"Bot Bedrock {BOT_USERNAME} đang hoạt động!"
+def index(): return "Bot Bedrock Online!"
+def run_flask(): app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-# --- PHẦN CODE BOT BEDROCK ---
+# --- CODE BOT BEDROCK ---
 bedrock = require('bedrock-protocol')
 
 def run_bot():
     while True:
         try:
-            print(f"[*] Đang kết nối tới Server Bedrock: {SERVER_IP}:{SERVER_PORT}...")
+            print(f"[*] Đang kết nối tới {SERVER_IP}:{SERVER_PORT}...")
             
-            # Tạo client kết nối
             client = bedrock.createClient({
                 'host': SERVER_IP,
                 'port': SERVER_PORT,
                 'username': BOT_USERNAME,
-                'offline': True, # BẮT BUỘC: Server phải bật Cracked
+                'offline': True,       # Bắt buộc cho server Cracked
+                'skipPing': True,      # Bỏ qua check ping để vào nhanh
+                'version': 'latest'    # Cố gắng dùng bản mới nhất
+            })
+
+            is_connected = False
+
+            @On(client, 'spawn')
+            def on_spawn(packet):
+                nonlocal is_connected
+                is_connected = True
+                print(f"[+] {BOT_USERNAME} ĐÃ VÀO SERVER!")
+                
+                # Chat mỗi 30s để server biết bot còn sống
+                def chat_loop():
+                    while is_connected:
+                        try:
+                            # Gửi packet text thay vì client.queue('text') hay lỗi
+                            client.queue('text', {
+                                'type': 'chat', 'needs_translation': False, 
+                                'source_name': client.username, 'xuid': '', 
+                                'platform_chat_id': '', 'message': "Bot treo..."
+                            })
+                            time.sleep(30)
+                        except: break
+                threading.Thread(target=chat_loop, daemon=True).start()
+
+            @On(client, 'disconnect') # Bắt lỗi disconnect cụ thể
+            def on_disconnect(packet):
+                print(f"[-] Bị kick: {packet}")
+                nonlocal is_connected
+                is_connected = False
+
+            @On(client, 'close')
+            def on_close(reason):
+                print(f"[-] Đóng kết nối: {reason}")
+                nonlocal is_connected
+                is_connected = False
+
+            @On(client, 'error')
+            def on_error(err):
+                print(f"[!] Lỗi: {err}")
+
+            # Giữ connection
+            while True:
+                time.sleep(1)
+                if not is_connected and getattr(client, 'status', 0) == 1: # Check trạng thái đóng
+                    break
+
+        except Exception as e:
+            print(f"[!] Crash: {e}")
+            time.sleep(10)
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot, daemon=True).start()
+    run_flask()
                 'skipPing': True # Bỏ qua check ping để vào nhanh hơn
             })
 
