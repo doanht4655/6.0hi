@@ -6,146 +6,95 @@ from javascript import require, On
 
 # --- CẤU HÌNH ---
 SERVER_IP = "bongx1.aternos.me"
-SERVER_PORT = 48987 # Check lại port trên Aternos xem có đổi ko
-BOT_USERNAME = "Bot_BongX_Vip"
+SERVER_PORT = 48987
+BOT_USERNAME = "Bot_Bedrock_Vip"
 
+# --- WEB SERVER (Để Render không tắt) ---
 app = Flask(__name__)
-@app.route('/')
-def index(): return "Bot Bedrock Online!"
-def run_flask(): app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
 
-# --- CODE BOT BEDROCK ---
+@app.route('/')
+def index():
+    return f"Bot {BOT_USERNAME} đang chạy!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# --- BOT BEDROCK ---
 bedrock = require('bedrock-protocol')
 
 def run_bot():
     while True:
         try:
-            print(f"[*] Đang kết nối tới {SERVER_IP}:{SERVER_PORT}...")
+            print(f"[*] Dang ket noi toi {SERVER_IP}:{SERVER_PORT}...")
             
+            # Cấu hình Client (Thụt đầu dòng chuẩn)
             client = bedrock.createClient({
                 'host': SERVER_IP,
                 'port': SERVER_PORT,
                 'username': BOT_USERNAME,
-                'offline': True,       # Bắt buộc cho server Cracked
+                'offline': True,       # Bắt buộc cho Aternos Cracked
                 'skipPing': True,      # Bỏ qua check ping để vào nhanh
-                'version': 'latest'    # Cố gắng dùng bản mới nhất
+                'version': 'latest'    # Thử dùng bản mới nhất
             })
 
+            # Biến kiểm tra kết nối
             is_connected = False
 
+            # Sự kiện khi vào Server thành công
             @On(client, 'spawn')
             def on_spawn(packet):
                 nonlocal is_connected
                 is_connected = True
-                print(f"[+] {BOT_USERNAME} ĐÃ VÀO SERVER!")
+                print(f"[+] {BOT_USERNAME} DA VAO SERVER!")
                 
-                # Chat mỗi 30s để server biết bot còn sống
+                # Hàm Anti-AFK: Chat mỗi 60 giây
                 def chat_loop():
                     while is_connected:
                         try:
-                            # Gửi packet text thay vì client.queue('text') hay lỗi
+                            # Gửi tin nhắn chat để server biết bot còn sống
                             client.queue('text', {
-                                'type': 'chat', 'needs_translation': False, 
-                                'source_name': client.username, 'xuid': '', 
-                                'platform_chat_id': '', 'message': "Bot treo..."
+                                'type': 'chat', 
+                                'needs_translation': False, 
+                                'source_name': client.username, 
+                                'xuid': '', 
+                                'platform_chat_id': '',
+                                'message': "Bot treo may..."
                             })
-                            time.sleep(30)
-                        except: break
+                            print("[Action] Da gui chat chong AFK")
+                            time.sleep(60)
+                        except:
+                            break
+                
+                # Chạy luồng chat riêng
                 threading.Thread(target=chat_loop, daemon=True).start()
-
-            @On(client, 'disconnect') # Bắt lỗi disconnect cụ thể
-            def on_disconnect(packet):
-                print(f"[-] Bị kick: {packet}")
-                nonlocal is_connected
-                is_connected = False
-
-            @On(client, 'close')
-            def on_close(reason):
-                print(f"[-] Đóng kết nối: {reason}")
-                nonlocal is_connected
-                is_connected = False
-
-            @On(client, 'error')
-            def on_error(err):
-                print(f"[!] Lỗi: {err}")
-
-            # Giữ connection
-            while True:
-                time.sleep(1)
-                if not is_connected and getattr(client, 'status', 0) == 1: # Check trạng thái đóng
-                    break
-
-        except Exception as e:
-            print(f"[!] Crash: {e}")
-            time.sleep(10)
-
-if __name__ == "__main__":
-    threading.Thread(target=run_bot, daemon=True).start()
-    run_flask()
-                'skipPing': True # Bỏ qua check ping để vào nhanh hơn
-            })
-
-            # Biến kiểm tra trạng thái
-            is_connected = False
-
-            # Sự kiện khi kết nối thành công (spawn)
-            @On(client, 'spawn')
-            def on_spawn(packet):
-                nonlocal is_connected
-                if not is_connected:
-                    print(f"[+] {BOT_USERNAME} ĐÃ VÀO SERVER THÀNH CÔNG!")
-                    is_connected = True
-                    
-                    # Vòng lặp Anti-AFK (Chat mỗi 60s)
-                    def anti_afk_loop():
-                        while is_connected:
-                            try:
-                                # Gửi packet chat để server biết mình còn sống
-                                # (Bot Bedrock không nhảy được, nên phải dùng chat)
-                                msg = "Bot đang treo máy..."
-                                client.queue('text', {
-                                    'type': 'chat', 
-                                    'needs_translation': False, 
-                                    'source_name': client.username, 
-                                    'xuid': '', 
-                                    'platform_chat_id': '',
-                                    'message': msg
-                                })
-                                print("[Action] Bot vừa chat chống AFK")
-                                time.sleep(60)
-                            except:
-                                break
-                    
-                    # Chạy luồng Anti-AFK riêng
-                    threading.Thread(target=anti_afk_loop, daemon=True).start()
 
             # Sự kiện khi bị ngắt kết nối
             @On(client, 'close')
             def on_close(reason):
                 nonlocal is_connected
                 is_connected = False
-                print(f"[-] Bot bị ngắt kết nối. Lý do: {reason}")
+                print(f"[-] Mat ket noi: {reason}")
 
             @On(client, 'error')
             def on_error(err):
-                print(f"[!] Lỗi: {err}")
+                print(f"[!] Loi: {err}")
 
-            # Giữ kết nối trong vòng lặp này
+            # Vòng lặp giữ kết nối
             while True:
                 time.sleep(1)
-                # Nếu bot bị disconnect thì thoát vòng lặp để reconnect
-                if not is_connected and "client" in locals() and hasattr(client, 'status') and client.status == 1: 
-                     # status 1 là disconnected trong một số phiên bản, nhưng an toàn nhất là dựa vào event close
-                     pass
+                # Nếu bot bị ngắt, thoát vòng lặp này để reconnect lại từ đầu
+                if not is_connected:
+                    break
 
         except Exception as e:
-            print(f"[!] Lỗi khởi tạo: {e}")
-            time.sleep(20)
+            print(f"[!] Loi khoi tao: {e}")
+            time.sleep(10)
 
-# --- CHẠY ---
+# --- CHẠY CHƯƠNG TRÌNH ---
 if __name__ == "__main__":
-    t = threading.Thread(target=run_bot)
-    t.daemon = True
-    t.start()
+    # Chạy Bot ở luồng phụ
+    threading.Thread(target=run_bot, daemon=True).start()
+    # Chạy Flask ở luồng chính
     run_flask()
-            
+                            
